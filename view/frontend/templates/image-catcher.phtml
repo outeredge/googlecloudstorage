@@ -28,7 +28,7 @@
     });
 
     // Only run the mage/gallery require on product page
-    if (document.body.classList.contains('catalog-product-view')) {
+    if (document.body?.classList.contains('catalog-product-view')) {
         require(['jquery', 'mage/gallery/gallery'], function($, gallery){
 
             $('[data-gallery-role=gallery-placeholder]').on('gallery:loaded', async function () {
