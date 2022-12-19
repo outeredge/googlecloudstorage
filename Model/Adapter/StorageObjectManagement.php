@@ -284,16 +284,8 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
      */
     public function getObject(string $path): ?StorageObject
     {
-        $cacheGcs = $this->serializer->unserialize(
-            $this->cache->load(
-                GcsCache::TYPE_IDENTIFIER
-            ));
-
-        if (in_array($path, $cacheGcs)) {
-            //ToDo. Should we return the object instead of null?
-            //AuroraExtensions\GoogleCloudStorage\Model\File\Storage\Bucket::loadByFilename will need the object
-            return NULL;
-        }
+        $cache = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
+        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : null;
 
         if ($this->hasPrefix()) {
             $prefixedPath = implode(DIRECTORY_SEPARATOR, [
@@ -304,6 +296,11 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         $object   = $this->bucket->object($prefixedPath);
         $fallback = $this->deploymentConfig->get('storage/fallback_url');
+
+        if (!is_null($cacheGcs) && in_array($path, $cacheGcs)) {
+            return $object;
+        }
+        $newCacheGcs = $cacheGcs ? array_merge($cacheGcs, [$path]) : [$path];
 
         if (!$object->exists() && $fallback) {
             if (is_array($fallback)) {
@@ -339,7 +336,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         //Store path in GcsCache
         $this->cache->save(
-            $this->serializer->serialize($path),
+            $this->serializer->serialize($newCacheGcs),
             GcsCache::TYPE_IDENTIFIER,
             [GcsCache::CACHE_TAG],
             86400
