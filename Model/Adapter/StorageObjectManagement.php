@@ -285,7 +285,11 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
     public function getObject(string $path): ?StorageObject
     {
         $cache = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
-        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : null;
+        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
+
+        if (in_array($path, $cacheGcs)) {
+            return null;
+        }
 
         if ($this->hasPrefix()) {
             $prefixedPath = implode(DIRECTORY_SEPARATOR, [
@@ -296,11 +300,6 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         $object   = $this->bucket->object($prefixedPath);
         $fallback = $this->deploymentConfig->get('storage/fallback_url');
-
-        if (!is_null($cacheGcs) && in_array($path, $cacheGcs)) {
-            return $object;
-        }
-        $newCacheGcs = $cacheGcs ? array_merge($cacheGcs, [$path]) : [$path];
 
         if (!$object->exists() && $fallback) {
             if (is_array($fallback)) {
@@ -336,7 +335,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         //Store path in GcsCache
         $this->cache->save(
-            $this->serializer->serialize($newCacheGcs),
+            $this->serializer->serialize(array_merge($cacheGcs, [$path])),
             GcsCache::TYPE_IDENTIFIER,
             [GcsCache::CACHE_TAG],
             86400
