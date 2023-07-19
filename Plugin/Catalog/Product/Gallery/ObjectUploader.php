@@ -91,12 +91,12 @@ class ObjectUploader
     /**
      * @param ExtensionInterface $subject
      * @param ProductInterface $result
-     * @return void
+     * @return ProductInterface
      */
     public function afterExecute(
         ExtensionInterface $subject,
         ProductInterface $result
-    ) {
+    ): ProductInterface {
         if (!$this->storageAdapter->isEnabled()) {
             return $result;
         }

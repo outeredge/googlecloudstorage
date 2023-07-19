@@ -450,7 +450,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         /** @var StorageObject $object */
         $object = $this->getObject($source);
-        return $object->exists() ? $object->copy($target) : null;
+        return ($object !== null && $object->exists()) ? $object->copy($target) : null;
     }
 
     /**
@@ -471,7 +471,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         /** @var StorageObject $object */
         $object = $this->getObject($source);
-        return $object->exists() ? $object->rename($target) : null;
+        return ($object !== null && $object->exists()) ? $object->rename($target) : null;
     }
 
     /**
