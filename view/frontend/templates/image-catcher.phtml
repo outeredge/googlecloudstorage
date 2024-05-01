@@ -12,7 +12,7 @@
         replacedImages.push(url);
         event.target.src = url.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
 
-        if(event.target.offsetParent?.tagName.toLowerCase() == 'picture') {
+        if(event.target.offsetParent?.tagName?.toLowerCase() == 'picture') {
             const sources = event.target.offsetParent.querySelectorAll('source');
             sources.forEach(function(source) {
                 let url = source.srcset.split('?')[0];
@@ -29,8 +29,9 @@
 
     window.addEventListener('load', function () {
         // Only run the mage/gallery require on product page
-        if (document.body.classList.contains('catalog-product-view')) {
+        if (document.body.classList.contains('catalog-product-view') && window.require) {
             require(['jquery', 'mage/gallery/gallery'], function($, gallery){
+                if (!$('[data-gallery-role=gallery-placeholder]')) return;
 
                 $('[data-gallery-role=gallery-placeholder]').on('gallery:loaded', async function () {
                     const api = $(this).data('gallery');
