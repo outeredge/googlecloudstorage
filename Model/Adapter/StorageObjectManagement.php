@@ -337,8 +337,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         $this->cache->save(
             $this->serializer->serialize(array_merge($cacheGcs, [$path])),
             GcsCache::TYPE_IDENTIFIER,
-            [GcsCache::CACHE_TAG],
-            86400
+            [GcsCache::CACHE_TAG]
         );
 
         return $object;
