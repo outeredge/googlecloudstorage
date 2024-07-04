@@ -6,7 +6,7 @@
     var replacedImages = [];
 
     window.addEventListener('error', (event) => {
-        if (event.target.tagName.toLowerCase() !== 'img') return;
+        if (event.target.tagName?.toLowerCase() !== 'img') return;
         const url = event.target.src.split('?')[0];
         if (replacedImages.includes(url)) return;
         replacedImages.push(url);
