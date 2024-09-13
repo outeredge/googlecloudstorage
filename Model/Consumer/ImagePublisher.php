@@ -2,29 +2,19 @@
 
 namespace AuroraExtensions\GoogleCloudStorage\Model\Consumer;
 
-use Magento\Framework\MessageQueue\PublisherInterface ;
+use Magento\Framework\MessageQueue\PublisherInterface;
 
 class ImagePublisher
 {
-    
     const QUEUE_NAME = 'outeredge.fallback.image.queue';
 
-    /**
-     * @var \Magento\Framework\MessageQueue\PublisherInterface
-     */
-    private $publisher;
-
-    /**
-     * @param \Magento\Framework\MessageQueue\PublisherInterface $publisher
-     */
-    public function __construct(PublisherInterface $publisher)
-    {
-        $this->publisher = $publisher;
+    public function __construct(
+        protected PublisherInterface $publisher
+    ) {
     }
 
-
-    public function execute(OrderInterface $order)
+    public function execute($data)
     {
-        $this->publisher->publish(self::QUEUE_NAME, $order);
+        $this->publisher->publish(self::QUEUE_NAME, $data);
     }
 }

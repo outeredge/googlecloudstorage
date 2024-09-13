@@ -18,6 +18,7 @@ declare(strict_types=1);
 
 namespace AuroraExtensions\GoogleCloudStorage\Model\Adapter;
 
+use AuroraExtensions\GoogleCloudStorage\Model\Consumer\ImagePublisher;
 use AuroraExtensions\GoogleCloudStorage\{
     Api\StorageObjectManagementInterface,
     Api\StorageObjectPathResolverInterface,
@@ -130,6 +131,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         StoreManagerInterface $storeManager,
         CacheInterface $cache,
         SerializerInterface $serializer,
+        protected ImagePublisher $imageQueuePublisher,
         bool $useModuleConfig = false
     ) {
         $this->enabled = $fileStorage->checkBucketUsage();
@@ -317,20 +319,8 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
                     $fallback = $fallback['default'];
                 }
             }
-            /* Attempt to load the image from fallback URL and upload to GCS */
-            $ch = curl_init($fallback . $path);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            $content = curl_exec($ch);
 
-            if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
-                $object = $this->uploadObject($content, [
-                    'name' => $prefixedPath,
-                    'predefinedAcl' => $this->getObjectAclPolicy()
-                ]);
-            }
-
-            curl_close($ch);
+            $this->imageQueuePublisher->execute(['url' => $fallback . $path, 'prefixedPath' => $prefixedPath]);
         }
 
         //Store path in GcsCache
