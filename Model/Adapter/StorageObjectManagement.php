@@ -300,8 +300,11 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         $object   = $this->bucket->object($prefixedPath);
         $fallback = $this->deploymentConfig->get('storage/fallback_url');
+        $exists   = false;
 
-        if (!$object->exists() && $fallback) {
+        if ($object->exists()) {
+            $exists = true;
+        } elseif ($fallback) {
             if (is_array($fallback)) {
                 $storecode = $this->storeManager->getStore()->getCode();
 
@@ -317,25 +320,27 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
                     $fallback = $fallback['default'];
                 }
             }
-            /* Attempt to load the image from fallback URL and upload to GCS */
-            $ch = curl_init($fallback . $path);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            $content = curl_exec($ch);
 
+            /* Attempt to load the image from fallback URL and upload to GCS */
+
+            // @todo move this to a shell background process
+            $ch = curl_init($data[0]);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_USERAGENT, self::USER_AGENT);
+            $content = curl_exec($ch);
             if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
-                $object = $this->uploadObject($content, [
-                    'name' => $prefixedPath,
-                    'predefinedAcl' => $this->getObjectAclPolicy()
+                $this->storageObjectManagement->uploadObject($content, [
+                    'name' => $data[1],
+                    'predefinedAcl' => $this->storageObjectManagement->getObjectAclPolicy()
                 ]);
             }
-
             curl_close($ch);
         }
 
-        //Store path in GcsCache
         $this->cache->save(
-            $this->serializer->serialize(array_merge($cacheGcs, [$path])),
+            $this->serializer->serialize(array_merge($cacheGcs, [$path => $exists])),
             GcsCache::TYPE_IDENTIFIER,
             [GcsCache::CACHE_TAG]
         );
@@ -373,6 +378,14 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         // Don't waste requests if path does not have an extension
         if (strpos($path, '.') === false) {
             return false;
+        }
+
+        // Don't waste requests if an attempt has already been made
+        $cache = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
+        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
+
+        if (in_array($path, $cacheGcs)) {
+            return $cacheGcs[$path];
         }
 
         /** @var StorageObject|null $object */
