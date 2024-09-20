@@ -62,6 +62,8 @@ use function __;
 
 class StorageObjectManagement implements StorageObjectManagementInterface, StorageObjectPathResolverInterface
 {
+    const USER_AGENT = 'outeredge/gcs';
+
     /**
      * @var ModuleConfig $moduleConfig
      * @method ModuleConfig getConfig()
@@ -322,18 +324,17 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
             }
 
             /* Attempt to load the image from fallback URL and upload to GCS */
-
             // @todo move this to a shell background process
-            $ch = curl_init($data[0]);
+            $ch = curl_init($fallback . $path);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
             curl_setopt($ch, CURLOPT_TIMEOUT, 30);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_USERAGENT, self::USER_AGENT);
             $content = curl_exec($ch);
             if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
-                $this->storageObjectManagement->uploadObject($content, [
-                    'name' => $data[1],
-                    'predefinedAcl' => $this->storageObjectManagement->getObjectAclPolicy()
+                $this->uploadObject($content, [
+                    'name' => $prefixedPath,
+                    'predefinedAcl' => $this->getObjectAclPolicy()
                 ]);
             }
             curl_close($ch);
