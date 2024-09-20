@@ -293,12 +293,6 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
             return null;
         }
 
-        $this->cache->save(
-            $this->serializer->serialize(array_merge($cacheGcs, [$path])),
-            GcsCache::TYPE_IDENTIFIER,
-            [GcsCache::CACHE_TAG]
-        );
-
         if ($this->hasPrefix()) {
             $prefixedPath = implode(DIRECTORY_SEPARATOR, [
                 $this->getPrefix(),
@@ -308,8 +302,11 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         $object   = $this->bucket->object($prefixedPath);
         $fallback = $this->deploymentConfig->get('storage/fallback_url');
+        $exists   = false;
 
-        if ($fallback && !$object->exists()) {
+        if ($object->exists()) {
+            $exists = true;
+        } elseif ($fallback) {
             if (is_array($fallback)) {
                 $storecode = $this->storeManager->getStore()->getCode();
 
@@ -328,6 +325,12 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
             $this->imageQueuePublisher->execute(['url' => $fallback . $path, 'prefixedPath' => $prefixedPath]);
         }
+
+        $this->cache->save(
+            $this->serializer->serialize(array_merge($cacheGcs, [$path => $exists])),
+            GcsCache::TYPE_IDENTIFIER,
+            [GcsCache::CACHE_TAG]
+        );
 
         return $object;
     }
@@ -369,14 +372,8 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
 
         if (in_array($path, $cacheGcs)) {
-            return false;
+            return $cacheGcs[$path];
         }
-
-        $this->cache->save(
-            $this->serializer->serialize(array_merge($cacheGcs, [$path])),
-            GcsCache::TYPE_IDENTIFIER,
-            [GcsCache::CACHE_TAG]
-        );
 
         /** @var StorageObject|null $object */
         $object = $this->getObject($path);

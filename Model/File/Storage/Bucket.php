@@ -155,7 +155,7 @@ class Bucket extends AbstractModel
      */
     public function loadByFilename(string $relativePath)
     {
-        if ($this->getStorage()->objectExists($relativePath) && $object = $this->getStorage()->getObject($relativePath)) {
+        if ($object = $this->getStorage()->getObject($relativePath)) {
             $this->setData('id', $relativePath);
             $this->setData('filename', $relativePath);
             $this->setData('content', $object->downloadAsString());
