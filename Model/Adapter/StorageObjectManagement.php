@@ -303,7 +303,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         $object   = $this->bucket->object($prefixedPath);
         $fallback = $this->deploymentConfig->get('storage/fallback_url');
 
-        if (!$object->exists() && $fallback) {
+        if ($fallback && !$object->exists()) {
             if (is_array($fallback)) {
                 $storecode = $this->storeManager->getStore()->getCode();
 
