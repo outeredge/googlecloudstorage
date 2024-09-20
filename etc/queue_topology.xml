@@ -1,6 +1,0 @@
-<?xml version="1.0"?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework-message-queue:etc/topology.xsd">
-    <exchange name="outeredge.fallback.image.queue" type="topic" connection="db">
-        <binding id="outeredgefallbackimagequeue" topic="outeredge.fallback.image.queue" destinationType="queue" destination="outeredge.fallback.image.queue"/>
-    </exchange>
-</config>
