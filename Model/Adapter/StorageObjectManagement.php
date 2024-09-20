@@ -293,6 +293,12 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
             return null;
         }
 
+        $this->cache->save(
+            $this->serializer->serialize(array_merge($cacheGcs, [$path])),
+            GcsCache::TYPE_IDENTIFIER,
+            [GcsCache::CACHE_TAG]
+        );
+
         if ($this->hasPrefix()) {
             $prefixedPath = implode(DIRECTORY_SEPARATOR, [
                 $this->getPrefix(),
@@ -322,13 +328,6 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
             $this->imageQueuePublisher->execute(['url' => $fallback . $path, 'prefixedPath' => $prefixedPath]);
         }
-
-        //Store path in GcsCache
-        $this->cache->save(
-            $this->serializer->serialize(array_merge($cacheGcs, [$path])),
-            GcsCache::TYPE_IDENTIFIER,
-            [GcsCache::CACHE_TAG]
-        );
 
         return $object;
     }
@@ -364,6 +363,20 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         if (strpos($path, '.') === false) {
             return false;
         }
+
+        // Don't waste requests if an attempt has already been made
+        $cache = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
+        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
+
+        if (in_array($path, $cacheGcs)) {
+            return false;
+        }
+
+        $this->cache->save(
+            $this->serializer->serialize(array_merge($cacheGcs, [$path])),
+            GcsCache::TYPE_IDENTIFIER,
+            [GcsCache::CACHE_TAG]
+        );
 
         /** @var StorageObject|null $object */
         $object = $this->getObject($path);
