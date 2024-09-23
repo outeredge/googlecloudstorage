@@ -10,6 +10,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use AuroraExtensions\GoogleCloudStorage\Model\Adapter\StorageObjectManagement;
 use Symfony\Component\Console\Input\InputArgument;
+use Psr\Log\LoggerInterface;
 
 class DownloadImage extends Command
 {
@@ -19,6 +20,7 @@ class DownloadImage extends Command
 
     public function __construct(
         protected StorageObjectManagement $storageObjectManagement,
+        protected LoggerInterface $logger,
         string $name = null
     ) {
         parent::__construct($name);
@@ -63,13 +65,8 @@ class DownloadImage extends Command
                 ]);
             }
             curl_close($ch);
-
-            $output->writeln('<comment>Successfully donwload image</comment>');
         } catch (LocalizedException $e) {
-            $output->writeln(sprintf(
-                '<error>%s</error>',
-                $e->getMessage()
-            ));
+            $this->logger->critical($e->getMessage());
             $exitCode = 1;
         }
 
