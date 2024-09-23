@@ -323,10 +323,9 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
                 }
             }
 
-            /* Attempt to load the image from fallback URL and upload to GCS */
-            // @todo move this to a shell background process
-            $url = $fallback . $path;
-            exec('bash -c "exec nohup setsid bin/magento outeredge:gcs:download --url=$url --prefixedPath=$prefixedPath > /dev/null 2>&1 &"');
+            /* Load the image in a shell background process */
+            $url = $fallback . $path;            
+            exec("bash -c 'exec nohup setsid bin/magento outeredge:gcs:download $url $prefixedPath > /dev/null 2>&1 &'");
         }
 
         $this->cache->save(

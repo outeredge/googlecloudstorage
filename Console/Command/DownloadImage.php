@@ -9,6 +9,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use AuroraExtensions\GoogleCloudStorage\Model\Adapter\StorageObjectManagement;
+use Symfony\Component\Console\Input\InputArgument;
 
 class DownloadImage extends Command
 {
@@ -27,6 +28,8 @@ class DownloadImage extends Command
     {
         $this->setName('outeredge:gcs:download');
         $this->setDescription('Download Image background process');
+        $this->addArgument('url', InputArgument::REQUIRED);
+        $this->addArgument('prefixedPath', InputArgument::REQUIRED);
 
         parent::configure();
     }
@@ -43,11 +46,11 @@ class DownloadImage extends Command
     {
         $exitCode = 0;
 
-        $url = $input->getOption(self::URL);
-        $prefixedPath = $input->getOption(self::PREFIXEDPATH);
+        $url = $input->getArgument(self::URL);
+        $prefixedPath = $input->getArgument(self::PREFIXEDPATH);
 
         try {
-            $ch = curl_init($ulr);
+            $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
             curl_setopt($ch, CURLOPT_TIMEOUT, 30);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
