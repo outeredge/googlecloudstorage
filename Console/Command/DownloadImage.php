@@ -66,7 +66,7 @@ class DownloadImage extends Command
             }
             curl_close($ch);
         } catch (LocalizedException $e) {
-            $this->logger->critical($e->getMessage());
+            $this->logger->error($e->getMessage());
             $exitCode = 1;
         }
 
