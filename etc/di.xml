@@ -130,6 +130,7 @@
         <arguments>
             <argument name="commands" xsi:type="array">
                 <item name="downloadImage" xsi:type="object">AuroraExtensions\GoogleCloudStorage\Console\Command\DownloadImage</item>
+                <item name="uploadImage" xsi:type="object">AuroraExtensions\GoogleCloudStorage\Console\Command\UploadImage</item>
             </argument>
         </arguments>
     </type>

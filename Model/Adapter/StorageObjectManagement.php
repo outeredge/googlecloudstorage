@@ -36,13 +36,13 @@ use Google\Cloud\{
     Storage\StorageObject
 };
 use Magento\Framework\{
+    App\CacheInterface,
     App\Filesystem\DirectoryList,
     Filesystem,
-    Filesystem\Driver\File as FileDriver
+    Filesystem\Driver\File as FileDriver,
+    Serialize\SerializerInterface
 };
 use Magento\Store\Model\StoreManagerInterface;
-use Magento\Framework\App\CacheInterface;
-use Magento\Framework\Serialize\SerializerInterface;
 use AuroraExtensions\GoogleCloudStorage\Model\Cache\Type\GcsCache;
 use Psr\Http\{
     Message\StreamInterface,
@@ -302,17 +302,23 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         $object   = $this->bucket->object($prefixedPath);
         $fallback = $this->deploymentConfig->get('storage/fallback_url');
-        $exists   = false;
+
+        $storecode = $this->storeManager->getStore()->getCode();
+        if ($storecode == 'admin' && stristr($_SERVER['REQUEST_URI'], '_admin')) {
+            $storecode = str_replace('_admin', '', explode('/', ltrim($_SERVER['REQUEST_URI'], '/'))[0]);
+        }
 
         if ($object->exists()) {
-            $exists = true;
+            // Download the image from GCS to local filesystem in the background
+            $cmd = sprintf(
+                'MAGE_RUN_CODE=%s bin/magento outeredge:gcs:download %s %s',
+                escapeshellarg($storecode),
+                escapeshellarg($prefixedPath),
+                escapeshellarg($path)
+            );
+
+            shell_exec(sprintf('%s > /dev/null 2>&1 &', $cmd));
         } elseif ($fallback) {
-            $storecode = $this->storeManager->getStore()->getCode();
-
-            if ($storecode == 'admin' && stristr($_SERVER['REQUEST_URI'], '_admin')) {
-                $storecode = str_replace('_admin', '', explode('/', ltrim($_SERVER['REQUEST_URI'], '/'))[0]);
-            }
-
             if (is_array($fallback)) {
                 if (isset($_GET['imgstore']) && isset($fallback[$_GET['imgstore']])) {
                     $fallback  = $fallback[$_GET['imgstore']];
@@ -324,23 +330,18 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
                 }
             }
 
-            /* Load the image in a shell background process */
+            // Download the image from the fallback URL and upload it to GCS for future usage
             $url = $fallback . $path;
             $cmd = sprintf(
-                'MAGE_RUN_CODE=%s bin/magento outeredge:gcs:download %s %s',
+                'MAGE_RUN_CODE=%s bin/magento outeredge:gcs:upload %s %s %s',
                 escapeshellarg($storecode),
                 escapeshellarg($url),
-                escapeshellarg($prefixedPath)
+                escapeshellarg($prefixedPath),
+                escapeshellarg($path)
             );
 
             shell_exec(sprintf('%s > /dev/null 2>&1 &', $cmd));
         }
-
-        $this->cache->save(
-            $this->serializer->serialize(array_merge($cacheGcs, [$path => $exists])),
-            GcsCache::TYPE_IDENTIFIER,
-            [GcsCache::CACHE_TAG]
-        );
 
         return $object;
     }
@@ -548,6 +549,14 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
             : $this->deploymentConfig->get('storage/bucket/acl');
 
         return !empty($aclPolicy) ? $aclPolicy : ModuleConfig::DEFAULT_ACL_POLICY;
+    }
+
+    /**
+     * Get an object instance directly without any pre-processing
+     */
+    public function getBucketObject($prefixedPath): StorageObject
+    {
+        return $this->bucket->object($prefixedPath);
     }
 
     /**

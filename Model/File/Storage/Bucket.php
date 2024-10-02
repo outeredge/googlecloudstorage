@@ -33,7 +33,6 @@ use Google\Cloud\{
 use Magento\Framework\{
     App\Filesystem\DirectoryList,
     Exception\LocalizedException,
-    Exception\FileSystemException,
     Filesystem,
     Filesystem\Driver\File as FileDriver,
     Model\AbstractModel,
@@ -155,14 +154,7 @@ class Bucket extends AbstractModel
      */
     public function loadByFilename(string $relativePath)
     {
-        if ($object = $this->getStorage()->getObject($relativePath)) {
-            $this->setData('id', $relativePath);
-            $this->setData('filename', $relativePath);
-            $this->setData('content', $object->downloadAsString());
-        } else {
-            $this->unsetData();
-        }
-
+        $this->getStorage()->getObject($relativePath);
         return $this;
     }
 
@@ -331,15 +323,14 @@ class Bucket extends AbstractModel
 
     /**
      * @param string $filePath
-     * @return bool Returns true on existing file or successful download, false on failure
+     * @return bool Returns true on existing file, false if file is to be downloaded in background (or on failure)
      */
     public function downloadFile(string $filePath): bool
     {
+        $mediaPath    = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA);
         $relativePath = $this->storageHelper->getMediaRelativePath($filePath);
         // @todo look up media path like https://github.com/magento/magento2/blob/2.4-develop/app/code/Magento/MediaStorage/App/Media.php#L187
         $relativePath = str_replace(DirectoryList::MEDIA . DIRECTORY_SEPARATOR, '', $relativePath);
-
-        $mediaPath    = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA);
 
         if ($mediaPath->isFile($relativePath)) {
             return true;
@@ -349,19 +340,6 @@ class Bucket extends AbstractModel
             $this->loadByFilename($relativePath);
         } catch (\Exception $e) {
             return false;
-        }
-
-        if ($this->getId()) {
-            $file = $mediaPath->openFile($relativePath, 'w');
-            try {
-                $file->lock();
-                $file->write($this->getContent());
-                $file->unlock();
-                $file->close();
-                return true;
-            } catch (FileSystemException $e) {
-                $file->close();
-            }
         }
 
         return false;
