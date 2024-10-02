@@ -307,15 +307,16 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         if ($object->exists()) {
             $exists = true;
         } elseif ($fallback) {
+            $storecode = $this->storeManager->getStore()->getCode();
+
+            if ($storecode == 'admin' && stristr($_SERVER['REQUEST_URI'], '_admin')) {
+                $storecode = str_replace('_admin', '', explode('/', ltrim($_SERVER['REQUEST_URI'], '/'))[0]);
+            }
+
             if (is_array($fallback)) {
-                $storecode = $this->storeManager->getStore()->getCode();
-
-                if ($storecode == 'admin' && stristr($_SERVER['REQUEST_URI'], '_admin')) {
-                    $storecode = str_replace('_admin', '', explode('/', ltrim($_SERVER['REQUEST_URI'], '/'))[0]);
-                }
-
                 if (isset($_GET['imgstore']) && isset($fallback[$_GET['imgstore']])) {
-                    $fallback = $fallback[$_GET['imgstore']];
+                    $fallback  = $fallback[$_GET['imgstore']];
+                    $storecode = $_GET['imgstore'];
                 } elseif (isset($fallback[$storecode])) {
                     $fallback = $fallback[$storecode];
                 } else {
@@ -323,21 +324,16 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
                 }
             }
 
-            /* Attempt to load the image from fallback URL and upload to GCS */
-            // @todo move this to a shell background process
-            $ch = curl_init($fallback . $path);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_USERAGENT, self::USER_AGENT);
-            $content = curl_exec($ch);
-            if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
-                $this->uploadObject($content, [
-                    'name' => $prefixedPath,
-                    'predefinedAcl' => $this->getObjectAclPolicy()
-                ]);
-            }
-            curl_close($ch);
+            /* Load the image in a shell background process */
+            $url = $fallback . $path;
+            $cmd = sprintf(
+                'MAGE_RUN_CODE=%s bin/magento outeredge:gcs:download %s %s',
+                escapeshellarg($storecode),
+                escapeshellarg($url),
+                escapeshellarg($prefixedPath)
+            );
+
+            shell_exec(sprintf('%s > /dev/null 2>&1 &', $cmd));
         }
 
         $this->cache->save(
