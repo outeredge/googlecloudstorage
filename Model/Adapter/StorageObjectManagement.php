@@ -311,8 +311,9 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         if ($object->exists()) {
             // Download the image from GCS to local filesystem in the background
             $cmd = sprintf(
-                'MAGE_RUN_CODE=%s bin/magento outeredge:gcs:download %s %s',
+                'MAGE_RUN_CODE=%s %s/bin/magento outeredge:gcs:download %s %s',
                 escapeshellarg($storecode),
+                BP,
                 escapeshellarg($prefixedPath),
                 escapeshellarg($path)
             );
@@ -333,8 +334,9 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
             // Download the image from the fallback URL and upload it to GCS for future usage
             $url = $fallback . $path;
             $cmd = sprintf(
-                'MAGE_RUN_CODE=%s bin/magento outeredge:gcs:upload %s %s %s',
+                'MAGE_RUN_CODE=%s %s/bin/magento outeredge:gcs:upload %s %s %s',
                 escapeshellarg($storecode),
+                BP,
                 escapeshellarg($url),
                 escapeshellarg($prefixedPath),
                 escapeshellarg($path)
