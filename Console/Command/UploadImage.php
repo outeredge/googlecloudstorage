@@ -65,13 +65,15 @@ class UploadImage extends Command
         $localPath  = $input->getArgument(self::LOCALPATH);
 
         try {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_USERAGENT, self::USER_AGENT);
-            $content = curl_exec($ch);
-            if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
+            $content = $this->curlRequest($url);
+
+            // If cached file can't be found, try the original source file instead
+            if (!$content && strpos($url, 'product/cache/') !== false) {
+                $url     = preg_replace('/cache\/[a-z0-9]{32}\//', '', $url);
+                $content = $this->curlRequest($url);
+            }
+
+            if ($content) {
                 $exists = true;
 
                 // Store on the local filesystem
@@ -89,7 +91,6 @@ class UploadImage extends Command
                     'predefinedAcl' => $this->storageObjectManagement->getObjectAclPolicy()
                 ]);
             }
-            curl_close($ch);
         } catch (FileSystemException $e) {
             if (isset($file)) {
                 $file->close();
@@ -109,5 +110,23 @@ class UploadImage extends Command
         );
 
         return $exitCode;
+    }
+
+    protected function curlRequest($url)
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, self::USER_AGENT);
+        $content = curl_exec($ch);
+
+        if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
+            curl_close($ch);
+            return $content;
+        }
+
+        curl_close($ch);
+        return false;
     }
 }
