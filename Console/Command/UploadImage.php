@@ -71,7 +71,7 @@ class UploadImage extends Command
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_USERAGENT, self::USER_AGENT);
             $content = curl_exec($ch);
-            if ($content && (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 || strpos(curl_getinfo($ch, CURLINFO_CONTENT_TYPE), 'image') !== false)) {
+            if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
                 $exists = true;
 
                 // Store on the local filesystem
