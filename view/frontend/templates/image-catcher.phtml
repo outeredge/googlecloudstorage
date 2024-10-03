@@ -1,7 +1,7 @@
 <?php if ($this->isEnabled()): ?>
 <script>
-    const cdnUrl   = '<?= $this->getMediaUrl() ?>';
-    const mediaUrl = '<?= $this->getBaseMediaUrl() ?>';
+    var cdnUrl   = '<?= $this->getMediaUrl() ?>';
+    var mediaUrl = '<?= $this->getBaseMediaUrl() ?>';
 
     var replacedImages = [];
 
@@ -10,7 +10,19 @@
         const url = event.target.src.split('?')[0];
         if (replacedImages.includes(url)) return;
         replacedImages.push(url);
+
         event.target.src = url.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+
+        if (event.target.srcset) {
+            const srcsetUrls = event.target.srcset.split(',').map(src => src.trim());
+            srcsetUrls.forEach((src, index) => {
+                const srcUrl = src.split(' ')[0]
+                if (srcUrl.includes('?imgstore=')) return;
+                replacedImages.push(srcUrl);
+                srcsetUrls[index] = srcUrl.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>' + ' ' + src.split(' ')[1];
+            });
+            event.target.srcset = srcsetUrls.join(', ');
+        }
 
         if(event.target.offsetParent?.tagName?.toLowerCase() == 'picture') {
             const sources = event.target.offsetParent.querySelectorAll('source');
@@ -27,6 +39,13 @@
         passive: true
     });
 
+    // Check if Breeze is loaded by using its custom event or a flag
+    var isBreezeActive = false;
+
+    document.addEventListener('breeze:load', function () {
+        isBreezeActive = true;
+    });
+
     window.addEventListener('load', function () {
         // Only run the mage/gallery require on product page
         if (document.body.classList.contains('catalog-product-view') && window.require) {
@@ -35,7 +54,9 @@
 
                 $('[data-gallery-role=gallery-placeholder]').on('gallery:loaded', async function () {
                     const api = $(this).data('gallery');
-                    const images = $('[data-gallery-role=gallery-placeholder]').data('gallery').fotorama.data;
+                    const images = isBreezeActive
+                    ? $('[data-gallery-role=gallery-placeholder]').data('gallery').options.data
+                    : $('[data-gallery-role=gallery-placeholder]').data('gallery').fotorama.data;
 
                     const checkIfImageExists = (url, callback) => {
                         const img = new Image();
@@ -56,11 +77,22 @@
 
                     let replacedGalleryImages = [];
                     const checkAllImages = () => {
+                        if (!images || !images.length) return;
                         images.forEach(image => {
                             checkIfImageExists(image.img, (exists) => {
                                 if (!exists) {
                                     image.img = image.img.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
                                     image.thumb = image.img;
+
+                                    if (isBreezeActive) {
+                                       image.full = image.full.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                       if (image.srcset.medium) {
+                                            image.srcset.medium = image.srcset.medium.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                       }
+                                       if (image.srcset.small) {
+                                            image.srcset.small = image.srcset.small.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                       }
+                                    }
                                 }
                                 replacedGalleryImages.push(image);
                             });
