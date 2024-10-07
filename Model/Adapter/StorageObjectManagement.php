@@ -38,6 +38,7 @@ use Google\Cloud\{
 use Magento\Framework\{
     App\CacheInterface,
     App\Filesystem\DirectoryList,
+    Exception\FileSystemException,
     Filesystem,
     Filesystem\Driver\File as FileDriver,
     Serialize\SerializerInterface
@@ -284,68 +285,109 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
     /**
      * {@inheritdoc}
      */
-    public function getObject(string $path): ?StorageObject
+    public function getObject(string $path, $storeCode = null): ?StorageObject
     {
-        $cache = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
-        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
+        $remotePath = $path;
 
-        if (in_array($path, $cacheGcs)) {
-            return null;
+        // We don't ask for cached versions, only originals
+        if (strpos($path, 'product/cache/') !== false) {
+            $remotePath = preg_replace('/cache\/[a-z0-9]{32}\//', '', $remotePath);
+
         }
 
+        $bucketPath = $remotePath;
         if ($this->hasPrefix()) {
-            $prefixedPath = implode(DIRECTORY_SEPARATOR, [
+            $bucketPath = implode(DIRECTORY_SEPARATOR, [
                 $this->getPrefix(),
-                ltrim($path, DIRECTORY_SEPARATOR),
+                ltrim($bucketPath, DIRECTORY_SEPARATOR),
             ]);
         }
 
-        $object   = $this->bucket->object($prefixedPath);
+        $object   = $this->bucket->object($bucketPath);
         $fallback = $this->deploymentConfig->get('storage/fallback_url');
+        $exists   = false;
 
-        $storecode = $this->storeManager->getStore()->getCode();
-        if ($storecode == 'admin' && stristr($_SERVER['REQUEST_URI'], '_admin')) {
-            $storecode = str_replace('_admin', '', explode('/', ltrim($_SERVER['REQUEST_URI'], '/'))[0]);
-        }
+        try {
+            if ($object->exists()) {
+                try {
+                    $mediaPath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA);
 
-        if ($object->exists()) {
-            // Download the image from GCS to local filesystem in the background
-            $cmd = sprintf(
-                'MAGE_RUN_CODE=%s %s/bin/magento outeredge:gcs:download %s %s',
-                escapeshellarg($storecode),
-                BP,
-                escapeshellarg($prefixedPath),
-                escapeshellarg($path)
-            );
+                    $file = $mediaPath->openFile($path, 'w');
+                    $file->lock();
+                    $file->write($object->downloadAsString());
+                    $file->unlock();
+                    $file->close();
 
-            shell_exec(sprintf('%s > /dev/null 2>&1 &', $cmd));
-        } elseif ($fallback) {
-            if (is_array($fallback)) {
-                if (isset($_GET['imgstore']) && isset($fallback[$_GET['imgstore']])) {
-                    $fallback  = $fallback[$_GET['imgstore']];
-                    $storecode = $_GET['imgstore'];
-                } elseif (isset($fallback[$storecode])) {
-                    $fallback = $fallback[$storecode];
-                } else {
-                    $fallback = $fallback['default'];
+                    $exists = true;
+                } catch (FileSystemException $e) {
+                    if (isset($file)) {
+                        $file->close();
+                    }
+                    throw $e;
+                }
+            } elseif ($fallback) {
+                // Download the image from the fallback URL to local filesystem and also upload it to GCS
+                if (is_array($fallback)) {
+                    $fallback = $fallback[$storeCode] ?? $fallback['default'];
+                }
+
+                if ($content = $this->curlRequest($fallback . $remotePath)) {
+                    $exists = true;
+
+                    // Store on the local filesystem
+                    $mediaPath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA);
+
+                    $file = $mediaPath->openFile($path, 'w');
+                    $file->lock();
+                    $file->write($content);
+                    $file->unlock();
+                    $file->close();
+
+                    // Upload to GCS
+                    $this->uploadObject($content, [
+                        'name' => $bucketPath,
+                        'predefinedAcl' => $this->getObjectAclPolicy()
+                    ]);
                 }
             }
+        } catch (FileSystemException $e) {
+            if (isset($file)) {
+                $file->close();
+            }
+            throw $e;
+        }
 
-            // Download the image from the fallback URL and upload it to GCS for future usage
-            $url = $fallback . $path;
-            $cmd = sprintf(
-                'MAGE_RUN_CODE=%s %s/bin/magento outeredge:gcs:upload %s %s %s',
-                escapeshellarg($storecode),
-                BP,
-                escapeshellarg($url),
-                escapeshellarg($prefixedPath),
-                escapeshellarg($path)
+        if ($exists) {
+            $cache    = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
+            $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
+            $cacheKey = $path . '?imgstore=' . $storeCode;
+
+            $this->cache->save(
+                $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => true])),
+                GcsCache::TYPE_IDENTIFIER,
+                [GcsCache::CACHE_TAG]
             );
-
-            shell_exec(sprintf('%s > /dev/null 2>&1 &', $cmd));
         }
 
         return $object;
+    }
+
+    protected function curlRequest($url)
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, self::USER_AGENT);
+        $content = curl_exec($ch);
+
+        if ($content && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
+            curl_close($ch);
+            return $content;
+        }
+
+        curl_close($ch);
+        return false;
     }
 
     /**
@@ -378,14 +420,6 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         // Don't waste requests if path does not have an extension
         if (strpos($path, '.') === false) {
             return false;
-        }
-
-        // Don't waste requests if an attempt has already been made
-        $cache = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
-        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
-
-        if (in_array($path, $cacheGcs)) {
-            return $cacheGcs[$path];
         }
 
         /** @var StorageObject|null $object */
@@ -551,14 +585,6 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
             : $this->deploymentConfig->get('storage/bucket/acl');
 
         return !empty($aclPolicy) ? $aclPolicy : ModuleConfig::DEFAULT_ACL_POLICY;
-    }
-
-    /**
-     * Get an object instance directly without any pre-processing
-     */
-    public function getBucketObject($prefixedPath): StorageObject
-    {
-        return $this->bucket->object($prefixedPath);
     }
 
     /**

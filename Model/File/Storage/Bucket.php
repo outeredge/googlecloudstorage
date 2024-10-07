@@ -23,6 +23,7 @@ use AuroraExtensions\GoogleCloudStorage\{
     Api\StorageObjectManagementInterface,
     Component\ModuleConfigTrait,
     Component\StorageAdapterTrait,
+    Model\Cache\Type\GcsCache,
     Model\System\ModuleConfig,
     Exception\ExceptionFactory
 };
@@ -31,14 +32,18 @@ use Google\Cloud\{
     Storage\ObjectIterator
 };
 use Magento\Framework\{
+    App\CacheInterface,
     App\Filesystem\DirectoryList,
     Exception\LocalizedException,
     Filesystem,
     Filesystem\Driver\File as FileDriver,
     Model\AbstractModel,
-    Phrase
+    Phrase,
+    Serialize\SerializerInterface,
+    UrlInterface
 };
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
+use Magento\Store\Model\StoreManagerInterface;
 use Psr\Log\LoggerInterface;
 
 use const DIRECTORY_SEPARATOR;
@@ -78,6 +83,15 @@ class Bucket extends AbstractModel
     /** @var StorageHelper $storageHelper */
     private $storageHelper;
 
+    /** @var CacheInterface $cache */
+    private $cache;
+
+    /** @var SerializerInterface $serializer */
+    private $serializer;
+
+    /** @var StoreManagerInterface $storeManager */
+    private $storeManager;
+
     /**
      * @param ExceptionFactory $exceptionFactory
      * @param FileDriver $fileDriver
@@ -86,6 +100,8 @@ class Bucket extends AbstractModel
      * @param ModuleConfig $moduleConfig
      * @param StorageHelper $storageHelper
      * @param StorageObjectManagementInterface $storageAdapter
+     * @param CacheInterface $cache
+     * @param SerializerInterface $serializer
      * @return void
      */
     public function __construct(
@@ -95,7 +111,10 @@ class Bucket extends AbstractModel
         LoggerInterface $logger,
         ModuleConfig $moduleConfig,
         StorageHelper $storageHelper,
-        StorageObjectManagementInterface $storageAdapter
+        StorageObjectManagementInterface $storageAdapter,
+        CacheInterface $cache,
+        SerializerInterface $serializer,
+        StoreManagerInterface $storeManager
     ) {
         $this->exceptionFactory = $exceptionFactory;
         $this->fileDriver = $fileDriver;
@@ -104,6 +123,9 @@ class Bucket extends AbstractModel
         $this->moduleConfig = $moduleConfig;
         $this->storageHelper = $storageHelper;
         $this->storageAdapter = $storageAdapter;
+        $this->cache = $cache;
+        $this->serializer = $serializer;
+        $this->storeManager = $storeManager;
     }
 
     /**
@@ -149,13 +171,43 @@ class Bucket extends AbstractModel
     }
 
     /**
+     * Get the object from GCS (runs in a background process)
+     *
      * @param string $relativePath
      * @return $this
      */
     public function loadByFilename(string $relativePath)
     {
-        $this->getStorage()->getObject($relativePath);
+        $storeCode = $this->getStoreCode();
+
+        if (stristr($_SERVER['SCRIPT_NAME'], 'get.php')) {
+            // If the request is already async, get object immediately
+            $this->getStorage()->getObject($relativePath, $storeCode);
+        } else {
+            // Otherwise make a CURL request to get.php so it runs "in the background",
+            // ultimately calling the getObject() above (ideally we would have used a
+            // message queue, but... we don't run crons in dev)
+            $mediaUrl = $this->storeManager->getStore()->getBaseUrl(UrlInterface::URL_TYPE_MEDIA);
+            $curlUrl  = $mediaUrl . $relativePath . '?imgstore=' . $storeCode;
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $curlUrl);
+            curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT_MS, 1);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+
         return $this;
+    }
+
+    protected function getStoreCode()
+    {
+        $storeCode = $_GET['imgstore'] ?? $this->storeManager->getStore()->getCode();
+        if ($storeCode == 'admin' && stristr($_SERVER['REQUEST_URI'], '_admin')) {
+            $storeCode = str_replace('_admin', '', explode('/', ltrim($_SERVER['REQUEST_URI'], '/'))[0]);
+        }
+        return $storeCode;
     }
 
     /**
@@ -332,17 +384,30 @@ class Bucket extends AbstractModel
         // @todo look up media path like https://github.com/magento/magento2/blob/2.4-develop/app/code/Magento/MediaStorage/App/Media.php#L187
         $relativePath = str_replace(DirectoryList::MEDIA . DIRECTORY_SEPARATOR, '', $relativePath);
 
+        $cache    = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
+        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
+        $cacheKey = $relativePath . '?imgstore=' . $this->getStoreCode();
+        $exists   = false;
+
+        if (array_key_exists($cacheKey, $cacheGcs)) {
+            return $cacheGcs[$cacheKey];
+        }
+
         if ($mediaPath->isFile($relativePath)) {
-            return true;
+            $exists = true;
         }
 
-        try {
+        $this->cache->save(
+            $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => $exists])),
+            GcsCache::TYPE_IDENTIFIER,
+            [GcsCache::CACHE_TAG]
+        );
+
+        if (!$exists) {
             $this->loadByFilename($relativePath);
-        } catch (\Exception $e) {
-            return false;
         }
 
-        return false;
+        return $exists;
     }
 
     /**
