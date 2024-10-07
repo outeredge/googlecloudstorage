@@ -6,7 +6,7 @@
   "require": {
     "psr/http-message": ">=1.0",
     "psr/log": ">=1.0",
-    "google/cloud-storage": "~1.27.0",
+    "google/cloud-storage": "~1.43.1",
     "magento/framework": "^103",
     "magento/module-media-storage": "^100",
     "magento/module-store": "^101",
