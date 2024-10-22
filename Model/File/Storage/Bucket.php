@@ -379,10 +379,12 @@ class Bucket extends AbstractModel
      */
     public function downloadFile(string $filePath): bool
     {
-        $mediaPath    = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA);
+        $mediaPrefix  = DirectoryList::MEDIA . DIRECTORY_SEPARATOR;
         $relativePath = $this->storageHelper->getMediaRelativePath($filePath);
-        // @todo look up media path like https://github.com/magento/magento2/blob/2.4-develop/app/code/Magento/MediaStorage/App/Media.php#L187
-        $relativePath = str_replace(DirectoryList::MEDIA . DIRECTORY_SEPARATOR, '', $relativePath);
+
+        if (strpos($relativePath, $mediaPrefix) === 0) {
+            $relativePath = substr($relativePath, strlen($mediaPrefix));
+        }
 
         $cache    = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
         $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
@@ -393,7 +395,8 @@ class Bucket extends AbstractModel
             return $cacheGcs[$cacheKey];
         }
 
-        if ($mediaPath->isFile($relativePath)) {
+        $mediaDir = $this->filesystem->getDirectoryRead(DirectoryList::MEDIA);
+        if ($mediaDir->isFile($relativePath)) {
             $exists = true;
         }
 
