@@ -389,28 +389,34 @@ class Bucket extends AbstractModel
         $cache    = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
         $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
         $cacheKey = $relativePath . '?imgstore=' . $this->getStoreCode();
-        $exists   = false;
 
         if (array_key_exists($cacheKey, $cacheGcs)) {
             return $cacheGcs[$cacheKey];
         }
 
         $mediaDir = $this->filesystem->getDirectoryRead(DirectoryList::MEDIA);
-        if ($mediaDir->isFile($relativePath)) {
-            $exists = true;
+        if (!$mediaDir->isFile($relativePath)) {
+            if (stristr($_SERVER['SCRIPT_NAME'], 'get.php')) {
+                // Store the impending request in the cache to avoid duplicate attempts
+                $this->cache->save(
+                    $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => false])),
+                    GcsCache::TYPE_IDENTIFIER,
+                    [GcsCache::CACHE_TAG]
+                );
+            }
+
+            $this->loadByFilename($relativePath);
+
+            return false;
         }
 
         $this->cache->save(
-            $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => $exists])),
+            $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => true])),
             GcsCache::TYPE_IDENTIFIER,
             [GcsCache::CACHE_TAG]
         );
 
-        if (!$exists) {
-            $this->loadByFilename($relativePath);
-        }
-
-        return $exists;
+        return true;
     }
 
     /**
