@@ -287,15 +287,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
      */
     public function getObject(string $path, $storeCode = null): ?StorageObject
     {
-        $remotePath = $path;
-
-        // We don't ask for cached versions, only originals
-        if (strpos($path, 'product/cache/') !== false) {
-            $remotePath = preg_replace('/cache\/[a-z0-9]{32}\//', '', $remotePath);
-
-        }
-
-        $bucketPath = $remotePath;
+        $bucketPath = $path;
         if ($this->hasPrefix()) {
             $bucketPath = implode(DIRECTORY_SEPARATOR, [
                 $this->getPrefix(),
@@ -309,6 +301,7 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
 
         try {
             if ($object->exists()) {
+                // Download from GCS to local filesystem
                 try {
                     $mediaPath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA);
 
@@ -329,6 +322,12 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
                 // Download the image from the fallback URL to local filesystem and also upload it to GCS
                 if (is_array($fallback)) {
                     $fallback = $fallback[$storeCode] ?? $fallback['default'];
+                }
+
+                $remotePath = $path;
+                if (strpos($path, 'product/cache/') !== false) {
+                    // We don't ask for cached versions from remotes, only originals
+                    $remotePath = preg_replace('/cache\/[a-z0-9]{32}\//', '', $remotePath);
                 }
 
                 if ($content = $this->curlRequest($fallback . $remotePath)) {
