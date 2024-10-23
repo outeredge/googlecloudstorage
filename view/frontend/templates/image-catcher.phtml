@@ -49,14 +49,14 @@
     window.addEventListener('load', function () {
         // Only run the mage/gallery require on product page
         if (document.body.classList.contains('catalog-product-view') && window.require) {
-            require(['jquery', 'mage/gallery/gallery'], function($, gallery){
+            require(['jquery', 'mage/gallery/gallery'], function($, gallery) {
                 if (!$('[data-gallery-role=gallery-placeholder]')) return;
 
                 $('[data-gallery-role=gallery-placeholder]').on('gallery:loaded', async function () {
                     const api = $(this).data('gallery');
                     const images = isBreezeActive
-                    ? $('[data-gallery-role=gallery-placeholder]').data('gallery').options.data
-                    : $('[data-gallery-role=gallery-placeholder]').data('gallery').fotorama.data;
+                        ? $('[data-gallery-role=gallery-placeholder]').data('gallery').options.data
+                        : $('[data-gallery-role=gallery-placeholder]').data('gallery').fotorama.data;
 
                     const checkIfImageExists = (url, callback) => {
                         const img = new Image();
@@ -65,43 +65,49 @@
                         if (img.complete) {
                             callback(true);
                         } else {
-                            img.onload = () => {
-                                callback(true);
-                            };
-
-                            img.onerror = () => {
-                                callback(false);
-                            };
+                            img.onload = () => callback(true);
+                            img.onerror = () => callback(false);
                         }
                     }
 
                     let replacedGalleryImages = [];
+                    let imagesUpdated = false; // Flag to track if any images are updated
+
                     const checkAllImages = () => {
                         if (!images || !images.length) return;
                         images.forEach(image => {
                             checkIfImageExists(image.img, (exists) => {
                                 if (!exists) {
+                                    // Update the image URLs
                                     image.img = image.img.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
                                     image.thumb = image.img;
 
                                     if (isBreezeActive) {
-                                       image.full = image.full.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
-                                       if (image.srcset.medium) {
+                                        image.full = image.full.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                        if (image.srcset.medium) {
                                             image.srcset.medium = image.srcset.medium.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
-                                       }
-                                       if (image.srcset.small) {
+                                        }
+                                        if (image.srcset.small) {
                                             image.srcset.small = image.srcset.small.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
-                                       }
+                                        }
                                     }
+
+                                    // Mark as updated
+                                    imagesUpdated = true;
                                 }
                                 replacedGalleryImages.push(image);
                             });
                         });
                     }
+
                     await checkAllImages();
-                    setTimeout(() => {
-                        api.updateData(replacedGalleryImages)
-                    }, 5000);
+
+                    // Only update the gallery if any image was replaced
+                    if (imagesUpdated) {
+                        setTimeout(() => {
+                            api.updateData(replacedGalleryImages);
+                        }, 5000);
+                    }
                 });
             });
         }
