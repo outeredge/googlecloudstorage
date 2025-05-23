@@ -56,7 +56,7 @@ class ExceptionFactory
      */
     public function create(
         string $type = Exception::class,
-        Phrase $message = null
+        ?Phrase $message = null
     ) {
         /** @var array $arguments */
         $arguments = [];

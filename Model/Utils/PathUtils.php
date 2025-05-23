@@ -144,7 +144,7 @@ class PathUtils
      */
     public function filter(
         array $pieces,
-        callable $callback = null,
+        ?callable $callback = null,
         bool $preserveKeys = false
     ): array {
         /* Defaults strlen for empty values. */

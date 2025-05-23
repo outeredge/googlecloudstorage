@@ -50,7 +50,7 @@ class LocalizedScopeDeploymentConfig implements LocalizedScopeDeploymentConfigIn
     public function __construct(
         DeploymentConfig $deploymentConfig,
         string $delimiter = self::DELIMITER,
-        string $scope = null
+        ?string $scope = null
     ) {
         $this->deploymentConfig = $deploymentConfig;
         $this->delimiter = $delimiter;
