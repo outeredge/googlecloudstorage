@@ -1,7 +1,13 @@
-<?php if ($this->isEnabled()): ?>
-<script>
-    var cdnUrl   = '<?= $this->getMediaUrl() ?>';
-    var mediaUrl = '<?= $this->getBaseMediaUrl() ?>';
+<?php if ($this->isEnabled()):
+/** @var \Magento\Framework\View\Helper\SecureHtmlRenderer $secureRenderer */
+
+$cdnUrl = $this->getMediaUrl();
+$mediaUrl = $this->getBaseMediaUrl();
+$storeCode = $this->getStoreCode();
+
+$script = <<<JS
+    var cdnUrl   = '{$cdnUrl}';
+    var mediaUrl = '{$mediaUrl}';
 
     var replacedImages = [];
 
@@ -11,7 +17,7 @@
         if (replacedImages.includes(url)) return;
         replacedImages.push(url);
 
-        event.target.src = url.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+        event.target.src = url.replace(cdnUrl, mediaUrl) + '?imgstore={$storeCode}';
 
         if (event.target.srcset) {
             const srcsetUrls = event.target.srcset.split(',').map(src => src.trim());
@@ -19,7 +25,7 @@
                 const srcUrl = src.split(' ')[0]
                 if (srcUrl.includes('?imgstore=')) return;
                 replacedImages.push(srcUrl);
-                srcsetUrls[index] = srcUrl.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>' + ' ' + src.split(' ')[1];
+                srcsetUrls[index] = srcUrl.replace(cdnUrl, mediaUrl) + '?imgstore={$storeCode}' + ' ' + src.split(' ')[1];
             });
             event.target.srcset = srcsetUrls.join(', ');
         }
@@ -30,7 +36,7 @@
                 let url = source.srcset.split('?')[0];
                 if (replacedImages.includes(url)) return;
                 replacedImages.push(url);
-                source.srcset = url.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                source.srcset = url.replace(cdnUrl, mediaUrl) + '?imgstore={$storeCode}';
             });
         }
     }, {
@@ -79,16 +85,16 @@
                             checkIfImageExists(image.img, (exists) => {
                                 if (!exists) {
                                     // Update the image URLs
-                                    image.img = image.img.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                    image.img = image.img.replace(cdnUrl, mediaUrl) + '?imgstore={$storeCode}';
                                     image.thumb = image.img;
 
                                     if (isBreezeActive) {
-                                        image.full = image.full.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                        image.full = image.full.replace(cdnUrl, mediaUrl) + '?imgstore={$storeCode}';
                                         if (image.srcset.medium) {
-                                            image.srcset.medium = image.srcset.medium.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                            image.srcset.medium = image.srcset.medium.replace(cdnUrl, mediaUrl) + '?imgstore={$storeCode}';
                                         }
                                         if (image.srcset.small) {
-                                            image.srcset.small = image.srcset.small.replace(cdnUrl, mediaUrl) + '?imgstore=<?= $this->getStoreCode() ?>';
+                                            image.srcset.small = image.srcset.small.replace(cdnUrl, mediaUrl) + '?imgstore={$storeCode}';
                                         }
                                     }
 
@@ -112,5 +118,8 @@
             });
         }
     });
-</script>
-<?php endif; ?>
+JS;
+
+echo $secureRenderer->renderTag('script', [], $script, false);
+
+endif; ?>
