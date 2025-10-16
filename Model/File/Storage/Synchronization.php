@@ -23,6 +23,10 @@ class Synchronization
      */
     public function synchronize($relativeFileName)
     {
+        if (empty($relativeFileName)) {
+            return;
+        }
+
         /** @var $storage Bucket */
         $storage = $this->storageFactory->create();
 
