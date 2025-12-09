@@ -31,9 +31,6 @@ use Magento\Store\{
  */
 class ModuleConfig
 {
-    /** @constant string DEFAULT_ACL_POLICY */
-    public const DEFAULT_ACL_POLICY = 'publicRead';
-
     /** @constant string DEFAULT_BUCKET_REGION */
     public const DEFAULT_BUCKET_REGION = 'us-central1';
 
@@ -133,23 +130,6 @@ class ModuleConfig
             $scope,
             $store
         );
-    }
-
-    /**
-     * @param int $store
-     * @param string $scope
-     * @return string
-     */
-    public function getBucketAclPolicy(
-        int $store = Store::DEFAULT_STORE_ID,
-        string $scope = ScopeInterface::SCOPE_STORE
-    ): string
-    {
-        return $this->scopeConfig->getValue(
-            'googlecloudstorage/bucket/acl',
-            $scope,
-            $store
-        ) ?? self::DEFAULT_ACL_POLICY;
     }
 
     /**

@@ -439,16 +439,14 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
     }
 
     /**
-     * @return string
+     * @return string|null
      * @deprecated Serves as stopgap during {@see ModuleConfig} deprecation.
      */
-    public function getObjectAclPolicy(): string
+    public function getObjectAclPolicy(): ?string
     {
         /** @var string|null $aclPolicy */
-        $aclPolicy = $this->useModuleConfig
-            ? $this->getConfig()->getBucketAclPolicy()
-            : $this->deploymentConfig->get('storage/bucket/acl');
+        $aclPolicy = $this->deploymentConfig->get('storage/bucket/acl');
 
-        return !empty($aclPolicy) ? $aclPolicy : ModuleConfig::DEFAULT_ACL_POLICY;
+        return !empty($aclPolicy) ? $aclPolicy : null;
     }
 }

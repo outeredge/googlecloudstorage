@@ -117,14 +117,17 @@ class ObjectUploader
         /** @var string $objectPath */
         $objectPath = $this->getStorage()->getObjectPath($filePath);
 
-        /** @var string $aclPolicy */
+        /** @var string|null $aclPolicy */
         $aclPolicy = $this->getStorage()->getObjectAclPolicy();
 
         /** @var array $options */
         $options = [
             'name' => $objectPath,
-            'predefinedAcl' => $aclPolicy,
         ];
+
+        if ($aclPolicy !== null) {
+            $options['predefinedAcl'] = $aclPolicy;
+        }
 
         try {
             /** @var resource $handle */
