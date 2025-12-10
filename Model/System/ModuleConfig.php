@@ -137,6 +137,23 @@ class ModuleConfig
      * @param string $scope
      * @return string
      */
+    public function getBucketAclPolicy(
+        int $store = Store::DEFAULT_STORE_ID,
+        string $scope = ScopeInterface::SCOPE_STORE
+    ): string
+    {
+        return $this->scopeConfig->getValue(
+            'googlecloudstorage/bucket/acl',
+            $scope,
+            $store
+        ) ?? self::DEFAULT_ACL_POLICY;
+    }
+
+    /**
+     * @param int $store
+     * @param string $scope
+     * @return string
+     */
     public function getBucketRegion(
         int $store = Store::DEFAULT_STORE_ID,
         string $scope = ScopeInterface::SCOPE_STORE
