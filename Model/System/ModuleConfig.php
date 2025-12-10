@@ -31,9 +31,6 @@ use Magento\Store\{
  */
 class ModuleConfig
 {
-    /** @constant string DEFAULT_ACL_POLICY */
-    public const DEFAULT_ACL_POLICY = 'publicRead';
-
     /** @constant string DEFAULT_BUCKET_REGION */
     public const DEFAULT_BUCKET_REGION = 'us-central1';
 
