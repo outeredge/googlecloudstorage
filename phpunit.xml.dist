@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * phpunit.xml.dist
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the MIT license, which
+ * is bundled with this package in the file LICENSE.txt.
+ *
+ * It is also available on the Internet at the following URL:
+ * https://docs.auroraextensions.com/magento/extensions/2.x/googlecloudstorage/LICENSE.txt
+ *
+ * @package     AuroraExtensions\GoogleCloudStorage
+ * @copyright   Copyright (C) 2021 Aurora Extensions <support@auroraextensions.com>
+ * @license     MIT
+ */
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/phpunit-9/phpunit.xsd"
+         bootstrap="Test/Unit/bootstrap.php"
+         colors="true">
+    <testsuite name="Unit">
+        <directory suffix="Test.php">Test/Unit</directory>
+    </testsuite>
+</phpunit>

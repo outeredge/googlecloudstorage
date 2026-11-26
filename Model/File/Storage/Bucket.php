@@ -24,6 +24,7 @@ use AuroraExtensions\GoogleCloudStorage\{
     Component\ModuleConfigTrait,
     Component\StorageAdapterTrait,
     Model\Cache\Type\GcsCache,
+    Model\Cache\Key,
     Model\System\ModuleConfig,
     Exception\ExceptionFactory
 };
@@ -47,7 +48,10 @@ use Magento\Store\Model\StoreManagerInterface;
 use Psr\Log\LoggerInterface;
 
 use const DIRECTORY_SEPARATOR;
+use function array_keys;
 use function implode;
+use function in_array;
+use function is_string;
 use function iterator_count;
 use function ltrim;
 use function rtrim;
@@ -201,13 +205,32 @@ class Bucket extends AbstractModel
         return $this;
     }
 
+    /**
+     * Get the store code for the current request, validated against
+     * the existing store codes. Untrusted input (e.g. the "imgstore"
+     * query parameter) falls back to the current store code when it
+     * does not match an existing store code.
+     *
+     * @return string
+     */
     protected function getStoreCode()
     {
         $storeCode = $_GET['imgstore'] ?? $this->storeManager->getStore()->getCode();
+
+        if (!is_string($storeCode) || $storeCode === '') {
+            $storeCode = $this->storeManager->getStore()->getCode();
+        }
+
         if ($storeCode == 'admin' && stristr($_SERVER['REQUEST_URI'], '_admin')) {
             $storeCode = str_replace('_admin', '', explode('/', ltrim($_SERVER['REQUEST_URI'], '/'))[0]);
         }
-        return $storeCode;
+
+        /** @var string[] $storeCodes */
+        $storeCodes = array_keys($this->storeManager->getStores());
+
+        return in_array($storeCode, $storeCodes, true)
+            ? $storeCode
+            : $this->storeManager->getStore()->getCode();
     }
 
     /**
@@ -386,22 +409,25 @@ class Bucket extends AbstractModel
             $relativePath = substr($relativePath, strlen($mediaPrefix));
         }
 
-        $cache    = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
-        $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
-        $cacheKey = $relativePath . '?imgstore=' . $this->getStoreCode();
+        /* One bounded cache entry per file, instead of a single shared unbounded record. */
+        $cacheId = Key::generate($relativePath, $this->getStoreCode());
+        $cached  = $this->cache->load($cacheId);
 
-        if (array_key_exists($cacheKey, $cacheGcs)) {
-            return $cacheGcs[$cacheKey];
+        if ($cached !== false) {
+            return (bool) $this->serializer->unserialize((string) $cached);
         }
 
         $mediaDir = $this->filesystem->getDirectoryRead(DirectoryList::MEDIA);
         if (!$mediaDir->isFile($relativePath)) {
             if (stristr($_SERVER['SCRIPT_NAME'], 'get.php')) {
-                // Store the impending request in the cache to avoid duplicate attempts
+                // Store the impending request in the cache to avoid duplicate attempts.
+                // Negative results are kept with a short lifetime, so a missing object
+                // is retried (and cache memory is reclaimed) after LIFETIME seconds.
                 $this->cache->save(
-                    $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => false])),
-                    GcsCache::TYPE_IDENTIFIER,
-                    [GcsCache::CACHE_TAG]
+                    $this->serializer->serialize(false),
+                    $cacheId,
+                    [GcsCache::CACHE_TAG],
+                    Key::LIFETIME
                 );
             }
 
@@ -411,9 +437,10 @@ class Bucket extends AbstractModel
         }
 
         $this->cache->save(
-            $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => true])),
-            GcsCache::TYPE_IDENTIFIER,
-            [GcsCache::CACHE_TAG]
+            $this->serializer->serialize(true),
+            $cacheId,
+            [GcsCache::CACHE_TAG],
+            Key::LIFETIME
         );
 
         return true;

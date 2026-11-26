@@ -44,6 +44,7 @@ use Magento\Framework\{
     Serialize\SerializerInterface
 };
 use Magento\Store\Model\StoreManagerInterface;
+use AuroraExtensions\GoogleCloudStorage\Model\Cache\Key;
 use AuroraExtensions\GoogleCloudStorage\Model\Cache\Type\GcsCache;
 use Psr\Http\{
     Message\StreamInterface,
@@ -357,14 +358,12 @@ class StorageObjectManagement implements StorageObjectManagementInterface, Stora
         }
 
         if ($exists) {
-            $cache    = $this->cache->load(GcsCache::TYPE_IDENTIFIER);
-            $cacheGcs = $cache ? $this->serializer->unserialize($cache) : [];
-            $cacheKey = $path . '?imgstore=' . $storeCode;
-
+            /* One bounded cache entry per file, instead of a single shared unbounded record. */
             $this->cache->save(
-                $this->serializer->serialize(array_merge($cacheGcs, [$cacheKey => true])),
-                GcsCache::TYPE_IDENTIFIER,
-                [GcsCache::CACHE_TAG]
+                $this->serializer->serialize(true),
+                Key::generate($path, (string) $storeCode),
+                [GcsCache::CACHE_TAG],
+                Key::LIFETIME
             );
         }
 
